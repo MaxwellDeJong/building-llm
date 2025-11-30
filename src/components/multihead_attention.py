@@ -1,7 +1,5 @@
 from einops import rearrange
 from jaxtyping import Bool, Float
-from jaxtyping import install_import_hook
-install_import_hook("mha", "typeguard")
 import torch
 
 from math_lib import matmul
@@ -17,7 +15,7 @@ class MultiHeadAttention(torch.nn.Module):
             num_heads: int,
             qkv_bias: bool = False) -> None:
         super().__init__()
-        assert d_out % num_heads == 0, "d_out must be divisible by num_heads."
+        assert d_out % num_heads == 0, 'd_out must be divisible by num_heads.'
 
         self.d_in = d_in
         self.d_out = d_out

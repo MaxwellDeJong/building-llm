@@ -1,4 +1,5 @@
 einops
 jaxtyping
+tiktoken
 torch
 
