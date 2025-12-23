@@ -1,5 +1,6 @@
 einops
 jaxtyping
+numpy
 tiktoken
 torch
 
