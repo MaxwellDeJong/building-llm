@@ -1,3 +1,4 @@
+"""BPE merge table and helper functions for token merges."""
 import collections
 import dataclasses
 from typing import Dict, List, Optional, Sequence
@@ -33,6 +34,8 @@ def _replace_token_pair(
 
 @dataclasses.dataclass
 class TokenMerges:
+    """Ordered table of BPE merges."""
+
     merges: Dict[token_pair_module.TokenPair, int]
 
     def __contains__(self, token_pair: token_pair_module.TokenPair) -> bool:
@@ -43,15 +46,17 @@ class TokenMerges:
 
     def update_vocabulary(
             self, vocabulary: vocabulary_module.Vocabulary) -> None:
+        """Add each merged token and its text representation to vocabulary."""
         for token_pair, new_token in self.merges.items():
             merged_text = token_pair.form_merged_text(vocabulary)
             vocabulary.text_to_token[merged_text] = new_token
             vocabulary.token_to_text[new_token] = merged_text
 
     def tokenize_text_segment(
-            self, 
+            self,
             text_segment: str,
             vocabulary: vocabulary_module.Vocabulary) -> List[int]:
+        """Apply BPE merges to encode a text segment into token ids."""
         tokens = [vocabulary.text_to_token.get(char) for char in text_segment]
         additional_merges_possible = True
         while additional_merges_possible and len(tokens) > 1:
@@ -83,6 +88,7 @@ def identify_byte_pair_encoding_merges(
         tokens: Sequence[int],
         initial_vocab_size: int,
         vocab_size: int) -> None:
+    """Greedily build a BPE merge table from tokens."""
     merges: Dict[token_pair_module.TokenPair, int] = {}
     for next_token in range(initial_vocab_size, vocab_size):
         token_pair = _find_most_frequent_token_pair(tokens)

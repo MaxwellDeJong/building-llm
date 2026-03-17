@@ -1,0 +1,31 @@
+[MASTER]
+# Add src/ to sys.path so that bare imports like "from components import ..."
+# resolve correctly.  source-roots alone is insufficient when src/__init__.py
+# exists (pylint then treats src as a package rather than a source root).
+init-hook='import sys; sys.path.insert(0, "src")'
+source-roots=src
+
+[MESSAGES CONTROL]
+# nn.Module subclasses intentionally expose only `forward`; the two-method
+# minimum is not meaningful for this pattern.
+disable=R0903
+
+[DESIGN]
+# Neural network modules routinely hold more than seven layer attributes.
+max-attributes=15
+
+[BASIC]
+# Attributes: standard snake_case  OR  optional leading underscore followed by
+# single-uppercase-letter + underscore prefix (e.g. W_query, _W_key) used by
+# convention for weight matrices.
+attr-rgx=([a-z_][a-z0-9_]{0,29}|_?[A-Z]_[a-z][a-z0-9_]*)$
+
+# Variables: standard snake_case  OR  snake_case with a trailing uppercase
+# letter (e.g. keysT) used by convention for transposed tensors.
+variable-rgx=([a-z_][a-z0-9_]{0,29}|[a-z_][a-z0-9_]+[A-Z])$
+
+# Arguments: same permissive snake_case as variables.  Setting any *-rgx key
+# causes pylint to abandon the default naming-style for adjacent categories, so
+# this must be set explicitly to keep single-letter args (x) and short
+# alphanumeric args (t1, t2) valid.
+argument-rgx=([a-z_][a-z0-9_]{0,29}|[a-z_][a-z0-9_]+[A-Z])$

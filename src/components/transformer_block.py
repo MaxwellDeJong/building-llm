@@ -1,4 +1,5 @@
-from typing import Any, Dict
+"""Transformer block combining MHA with MLP."""
+import dataclasses
 
 from jaxtyping import Float
 import torch
@@ -8,24 +9,44 @@ from components import layer_norm
 from components import multihead_attention
 
 
+@dataclasses.dataclass
+class TransformerBlockConfig:
+    """Configuration for a single transformer block."""
+    mha_config: multihead_attention.MultiHeadAttentionConfig
+    ffn_config: feed_forward_network.FeedForwardNetworkConfig
+
+    def __post_init__(self):
+        if self.emb_dim != self.mha_config.d_out:
+            raise ValueError('emb_dim must match mha_config.d_out.')
+        if self.mha_config.d_out != self.ffn_config.emb_dim:
+            raise ValueError('MHA and FFN must have the same output dimension.')
+
+    @property
+    def emb_dim(self) -> int:
+        """Get embedding dimension."""
+        return self.ffn_config.emb_dim
+
+
 class TransformerBlock(torch.nn.Module):
-    def __init__(self, cfg: Dict[str, Any]) -> None:
+    """Single transformer block combining attention with FFN with residuals."""
+
+    def __init__(self, transformer_config: TransformerBlockConfig) -> None:
         super().__init__()
-        self._emb_dim: int = cfg['emb_dim']
+        self._emb_dim = transformer_config.emb_dim
         self._mha = multihead_attention.MultiHeadAttention(
-            d_in=self._emb_dim,
-            d_out=self._emb_dim,
-            context_length=cfg['context_length'],
-            num_heads=cfg['n_heads'],
-            dropout=cfg['drop_out'],
-            qkv_bias=cfg['qkv_bias'])
-        self._ffn = feed_forward_network.FeedForwardNetwork(cfg)
-        self._mha_norm = layer_norm.LayerNorm(self._emb_dim)
-        self._ffn_norm = layer_norm.LayerNorm(self._emb_dim)
-        self._drop_out = torch.nn.Dropout(cfg['drop_out'])
+            transformer_config.mha_config)
+        self._ffn = feed_forward_network.FeedForwardNetwork(
+            transformer_config.ffn_config)
+        self._mha_norm = layer_norm.LayerNorm(
+            layer_norm.LayerNormConfig(emb_dim=self._emb_dim))
+        self._ffn_norm = layer_norm.LayerNorm(
+            layer_norm.LayerNormConfig(emb_dim=self._emb_dim))
+        self._drop_out = torch.nn.Dropout(
+            transformer_config.mha_config.dropout)
 
     def forward(self, x: Float[torch.Tensor, 'batch seq emb']) -> (
             Float[torch.Tensor, 'batch seq emb']):
+        """Apply one transformer block to the input tensor."""
         if x.shape[-1] != self._emb_dim:
             raise TypeError(
                 f'Expected emb_dim={self._emb_dim}, got {x.shape[-1]}.')
@@ -42,4 +63,3 @@ class TransformerBlock(torch.nn.Module):
         x = self._drop_out(x)
         x += res_input
         return x
-

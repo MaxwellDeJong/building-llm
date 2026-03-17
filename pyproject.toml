@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "building-llm"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "einops",
+    "jaxtyping",
+    "tiktoken",
+    "torch",
+    "typeguard",
+]
+
+# Pylint configuration lives in .pylintrc (takes precedence over pyproject.toml
+# when both are present, so all lint settings are kept there).
