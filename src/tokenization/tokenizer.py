@@ -1,3 +1,4 @@
+"""High-level tokenizer combining vocabulary building, merges, and codec."""
 from typing import List, Optional, Sequence
 
 from tokenization import text_segment as text_segment_module
@@ -6,6 +7,8 @@ from tokenization import vocabulary as vocabulary_module
 
 
 class Tokenizer:
+    """BPE tokenizer that supports training, encoding, and decoding."""
+
     def __init__(self):
         self._vocabulary: Optional[vocabulary_module.Vocabulary] = None
         self._token_merges: Optional[token_merges_module.TokenMerges] = None
@@ -14,7 +17,8 @@ class Tokenizer:
             self,
             text: str,
             vocab_size: int,
-            special_token_texts: Sequence[str] = ["<|endoftext|>"]) -> None:
+            special_token_texts: Sequence[str] = ('<|endoftext|>',)) -> None:
+        """Build the vocabulary and BPE merge table from text."""
         preprocessed_chars = (
             vocabulary_module.extract_preprocessed_characters(text))
         if self._vocabulary is None:
@@ -30,6 +34,7 @@ class Tokenizer:
 
     def encode(
             self, text: str, special_token_texts: Sequence[str]) -> List[int]:
+        """Encode text to a list of token ids."""
         text_segments = text_segment_module.form_text_segments(
             text, special_token_texts)
         tokens: List[int] = []
@@ -38,6 +43,7 @@ class Tokenizer:
         return tokens
 
     def decode(self, tokens: Sequence[int]) -> str:
+        """Decode a sequence of token ids back to a string."""
         token_texts = [
             self._vocabulary.get_text(token, raw=False) for token in  tokens]
         return ''.join(token_texts)

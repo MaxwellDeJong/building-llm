@@ -1,3 +1,4 @@
+"""Vocabulary data structures and initialisation utilities for BPE tokenization."""
 import dataclasses
 from typing import Dict, List, Optional, Sequence
 
@@ -5,6 +6,7 @@ SPACE_STRING_REPR = 'Ġ'
 
 
 def extract_preprocessed_characters(text: str) -> List[str]:
+    """Replace leading spaces before words with special character."""
     preprocessed_chars: List[str] = []
     for i, char in enumerate(text):
         if char == " " and i != 0:
@@ -29,6 +31,8 @@ def _identify_unique_characters(
 
 @dataclasses.dataclass
 class Vocabulary:
+    """Mapping between integer tokens and their text representations."""
+
     token_to_text: Dict[int, str]
     text_to_token: Dict[str, int]
 
@@ -42,12 +46,15 @@ class Vocabulary:
 
     def tokenize_preprocessed_characters(
             self, preprocessed_characters: Sequence[str]) -> List[int]:
+        """Map a sequence of preprocessed characters to their tokens."""
         return [self.text_to_token[char] for char in preprocessed_characters]
 
     def get_token(self, text: str) -> Optional[int]:
+        """Return the token for text if in the vocabulary."""
         return self.text_to_token.get(text)
 
     def get_text(self, token: int, raw: bool = False) -> Optional[str]:
+        """Return the text for a token, optionally with the space character."""
         raw_text = self.token_to_text.get(token)
         if raw:
             return raw_text
@@ -57,6 +64,7 @@ class Vocabulary:
 def initialize_vocabulary(
         preprocessed_chars: Sequence[str],
         special_token_texts: Sequence[str]) -> Vocabulary:
+    """Build a Vocabulary seeded with ASCII chars and any special tokens."""
     token_to_text: Dict[int, str] = {}
     text_to_token: Dict[str, int] = {}
     unique_chars = _identify_unique_characters(

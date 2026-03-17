@@ -1,3 +1,4 @@
+"""Utilities for splitting text around special tokens."""
 import dataclasses
 import re
 from typing import List, Sequence
@@ -61,6 +62,8 @@ def _split_text_on_spaces(text: str) -> List[str]:
 
 @dataclasses.dataclass(frozen=True)
 class TextSegment:
+    """A contiguous piece of text tagged."""
+
     text: str
     special: bool
 
@@ -91,6 +94,7 @@ class TextSegment:
             self,
             vocabulary: vocabulary_module.Vocabulary,
             token_merges: token_merges_module.TokenMerges) -> List[int]:
+        """Encode this segment to token ids."""
         if self.special:
             return self._encode_special(vocabulary)
         return self._encode_standard(vocabulary, token_merges)
@@ -98,13 +102,14 @@ class TextSegment:
 
 def form_text_segments(
         text: str, special_token_texts: Sequence[str]) -> List[TextSegment]:
+    """Split text into TextSegments based on special tokens."""
     if not special_token_texts:
         return [TextSegment(text, special=False)]
     text_segments: List[TextSegment] = []
     sanitized_token_texts = [
         re.escape(token_text) for token_text in
         _get_ordered_special_token_texts(special_token_texts)]
-    match_pattern = f'({'|'.join(sanitized_token_texts)})'
+    match_pattern = f'({"|".join(sanitized_token_texts)})'
     text_idx = 0
     for match in re.finditer(match_pattern, text):
         standard_text = text[text_idx:match.start()]
