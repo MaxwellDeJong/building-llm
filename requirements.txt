@@ -1,5 +1,7 @@
+dacite
 einops
 jaxtyping
 numpy
+pyyaml
 tiktoken
 torch

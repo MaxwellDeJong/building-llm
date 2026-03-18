@@ -16,13 +16,12 @@ class TransformerBlockConfig:
     ffn_config: feed_forward_network.FeedForwardNetworkConfig
 
     def __post_init__(self):
-        if self.emb_dim != self.mha_config.d_out:
-            raise ValueError('emb_dim must match mha_config.d_out.')
-        if self.mha_config.d_out != self.ffn_config.emb_dim:
+        if (self.ffn_config.emb_dim is not None
+                and self.mha_config.d_out != self.ffn_config.emb_dim):
             raise ValueError('MHA and FFN must have the same output dimension.')
 
     @property
-    def emb_dim(self) -> int:
+    def emb_dim(self) -> int | None:
         """Get embedding dimension."""
         return self.ffn_config.emb_dim
 

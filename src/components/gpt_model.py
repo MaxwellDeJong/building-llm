@@ -14,12 +14,14 @@ class GPTModelConfig:
     vocab_size: int
     n_layers: int
     drop_out: float
+    emb_dim: int
     transformer_block_config: transformer_block.TransformerBlockConfig
 
-    @property
-    def emb_dim(self) -> int:
-        """Network embedding dimension."""
-        return self.transformer_block_config.emb_dim
+    def __post_init__(self):
+        self.transformer_block_config.ffn_config.emb_dim = self.emb_dim
+        if self.transformer_block_config.mha_config.d_out != self.emb_dim:
+            raise ValueError(
+                'emb_dim must match transformer_block_config.mha_config.d_out.')
 
     @property
     def context_length(self) -> int:
