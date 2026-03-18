@@ -10,8 +10,8 @@ from components import gelu
 @dataclasses.dataclass
 class FeedForwardNetworkConfig:
     """Configuration for a two-layer feed-forward network."""
-    emb_dim: int
     expansion_factor: int = 4
+    emb_dim: int | None = None
 
 
 class FeedForwardNetwork(torch.nn.Module):

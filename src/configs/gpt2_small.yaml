@@ -1,0 +1,14 @@
+vocab_size: 50257
+n_layers: 12
+drop_out: 0.1
+emb_dim: 768
+transformer_block_config:
+  mha_config:
+    d_in: 768
+    d_out: 768
+    context_length: 1024
+    dropout: 0.1
+    num_heads: 12
+    qkv_bias: false
+  ffn_config:
+    expansion_factor: 4

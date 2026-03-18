@@ -1,12 +1,17 @@
 """Unit tests for GPT component forward passes."""
+import pathlib
 import unittest
 
+import dacite
 import torch
+import yaml
 
 from components import feed_forward_network
 from components import gpt_model
 from components import multihead_attention
 from components import transformer_block
+
+_CONFIGS_DIR = pathlib.Path(__file__).parent.parent / 'configs'
 
 
 class TestMultiHeadAttentionSmallBatch(unittest.TestCase):
@@ -50,11 +55,11 @@ class TestGPTModelSmallForwardPass(unittest.TestCase):
         mha_cfg = multihead_attention.MultiHeadAttentionConfig(
             d_in=768, d_out=768, context_length=1024,
             dropout=0.1, num_heads=12, qkv_bias=False)
-        ffn_cfg = feed_forward_network.FeedForwardNetworkConfig(emb_dim=768)
+        ffn_cfg = feed_forward_network.FeedForwardNetworkConfig()
         tb_cfg = transformer_block.TransformerBlockConfig(
             mha_config=mha_cfg, ffn_config=ffn_cfg)
         cfg = gpt_model.GPTModelConfig(
-            vocab_size=50257, n_layers=12, drop_out=0.1,
+            vocab_size=50257, n_layers=12, drop_out=0.1, emb_dim=768,
             transformer_block_config=tb_cfg)
         self.model = gpt_model.GPTModel(cfg)
         self.model.eval()
@@ -80,6 +85,34 @@ class TestGPTModelSmallForwardPass(unittest.TestCase):
             out = self.model(self.batch)
         self.assertFalse(torch.isnan(out).any().item())
         self.assertFalse(torch.isinf(out).any().item())
+
+
+class TestGPTModelFromYaml(unittest.TestCase):
+    """Instantiate a GPT model by deserialising a YAML config via dacite."""
+
+    def setUp(self):
+        torch.manual_seed(123)
+        config_path = _CONFIGS_DIR / 'gpt2_small.yaml'
+        with open(config_path) as f:
+            raw = yaml.safe_load(f)
+        self.cfg = dacite.from_dict(
+            data_class=gpt_model.GPTModelConfig, data=raw)
+        self.model = gpt_model.GPTModel(self.cfg)
+        self.model.eval()
+
+    def test_emb_dim_propagated_to_ffn(self):
+        """emb_dim specified at the top level must be propagated to ffn_config."""
+        self.assertEqual(
+            self.cfg.transformer_block_config.ffn_config.emb_dim,
+            self.cfg.emb_dim)
+
+    def test_output_shape(self):
+        """Model built from YAML config must produce correctly shaped logits."""
+        batch = torch.tensor([[6109, 3626, 6100, 345],
+                               [6109, 1110, 6622, 257]])
+        with torch.no_grad():
+            out = self.model(batch)
+        self.assertEqual(out.shape, torch.Size([2, 4, self.cfg.vocab_size]))
 
 
 if __name__ == '__main__':
