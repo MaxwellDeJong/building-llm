@@ -1,0 +1,30 @@
+services:
+  trainer:
+    build: .
+    image: building-llm-trainer
+
+    # ipc: host gives the DataLoader workers access to the host's shared-memory
+    # segment, avoiding "too many open files" / POSIX shm exhaustion that
+    # happens inside containers when num_workers > 0.
+    ipc: host
+
+    volumes:
+      # HuggingFace dataset / model cache.  Persists downloaded ClimbMix
+      # shards across container restarts so they are not re-downloaded.
+      - hf_cache:/data/huggingface
+
+      # Model checkpoints.  The training config sets checkpoint_dir:
+      # "checkpoints", which resolves to /app/checkpoints inside the container.
+      - checkpoints:/app/checkpoints
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  hf_cache:
+  checkpoints:
