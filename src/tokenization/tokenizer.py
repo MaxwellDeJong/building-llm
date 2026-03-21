@@ -1,4 +1,6 @@
 """High-level tokenizer combining vocabulary building, merges, and codec."""
+import pathlib
+import pickle
 from typing import List, Optional, Sequence
 
 from tokenization import text_segment as text_segment_module
@@ -12,6 +14,34 @@ class Tokenizer:
     def __init__(self):
         self._vocabulary: Optional[vocabulary_module.Vocabulary] = None
         self._token_merges: Optional[token_merges_module.TokenMerges] = None
+
+    @property
+    def vocab_size(self) -> int:
+        """Current vocabulary size; raises if the tokenizer has not been trained."""
+        if self._vocabulary is None:
+            raise RuntimeError("Tokenizer has not been trained yet.")
+        return len(self._vocabulary)
+
+    def save(self, path: str | pathlib.Path) -> None:
+        """Serialise the trained tokenizer state to a pickle file."""
+        path = pathlib.Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as fh:
+            pickle.dump(
+                {"vocabulary": self._vocabulary,
+                 "token_merges": self._token_merges},
+                fh,
+            )
+
+    @classmethod
+    def load(cls, path: str | pathlib.Path) -> "Tokenizer":
+        """Restore a tokenizer previously saved with :meth:`save`."""
+        tok = cls()
+        with open(path, "rb") as fh:
+            state = pickle.load(fh)
+        tok._vocabulary = state["vocabulary"]
+        tok._token_merges = state["token_merges"]
+        return tok
 
     def train(
             self,

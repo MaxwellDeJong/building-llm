@@ -2,10 +2,9 @@
 import dataclasses
 
 from einops import rearrange
-from jaxtyping import Bool, Float
+from jaxtyping import Float
 import torch
-
-from math_lib import matmul
+import torch.nn.functional as F
 
 
 @dataclasses.dataclass
@@ -58,47 +57,31 @@ class MultiHeadAttention(torch.nn.Module):
     def forward(self, x: Float[torch.Tensor, 'b t din']) -> (
             Float[torch.Tensor, 'b t dout']):
         """Compute multi-head causal self-attention over x."""
-        num_tokens = x.shape[1]
-
-        keys: Float[torch.Tensor,'b t dout'] = self._W_key(x)
+        keys: Float[torch.Tensor, 'b t dout'] = self._W_key(x)
         queries: Float[torch.Tensor, 'b t dout'] = self._W_query(x)
         values: Float[torch.Tensor, 'b t dout'] = self._W_value(x)
 
-        keysT = rearrange(
-            keys,
-            'b t (nh hd) -> b nh hd t',
-            nh=self._num_heads,
-            hd=self._head_dim)
-        values = rearrange(
-            values,
-            'b t (nh hd) -> b nh t hd',
-            nh=self._num_heads,
-            hd=self._head_dim)
-        queries = rearrange(
-            queries,
-            'b t (nh hd) -> b nh t hd',
-            nh=self._num_heads,
-            hd=self._head_dim)
+        keys = rearrange(keys, 'b t (nh hd) -> b nh t hd',
+                         nh=self._num_heads, hd=self._head_dim)
+        queries = rearrange(queries, 'b t (nh hd) -> b nh t hd',
+                            nh=self._num_heads, hd=self._head_dim)
+        values = rearrange(values, 'b t (nh hd) -> b nh t hd',
+                           nh=self._num_heads, hd=self._head_dim)
 
-        # Compute scaled dot-product attention (aka self-attention) with a
-        # causal mask.
-        attn_scores: Float[torch.Tensor, 'b nh t t'] = matmul.matmul(
-            queries, keysT)
+        # Flash Attention: O(T) VRAM for attention instead of O(T²).
+        # The causal mask, scaling by 1/sqrt(head_dim), and softmax are all
+        # handled inside the fused CUDA kernel; no attention-score tensor is
+        # materialised in the autograd graph.
+        dropout_p = self._dropout.p if self.training else 0.0
+        context_vec: Float[torch.Tensor, 'b nh t hd'] = (
+            F.scaled_dot_product_attention(
+                queries, keys, values,
+                attn_mask=None,
+                dropout_p=dropout_p,
+                is_causal=True,
+            )
+        )
 
-        # Original mask truncated to the number of tokens and converted to
-        # boolean.
-        mask_bool: Bool[torch.Tensor, 't t'] = self._mask.bool()[
-            :num_tokens, :num_tokens]
-
-        # Use the mask to fill attention scores.
-        attn_scores.masked_fill_(mask_bool, -torch.inf)
-
-        attn_weights = torch.softmax(attn_scores / self._head_dim**0.5, dim=-1)
-        attn_weights = self._dropout(attn_weights)
-
-        context_vec: Float[torch.Tensor, 'b nh t hd'] = matmul.matmul(
-            attn_weights, values)
         context_vec = rearrange(context_vec, 'b nh t hd -> b t (nh hd)')
-        context_vec = self._out_proj(context_vec) # optional projection
-
+        context_vec = self._out_proj(context_vec)
         return context_vec

@@ -1,4 +1,4 @@
-# Training hyperparameters for GPT pre-training on ClimbMix.
+# Training hyperparameters for GPT pre-training on karpathy/climbmix-400b-shuffle.
 # All keys map directly to fields in TrainingConfig (src/training/trainer.py).
 
 # ---------------------------------------------------------------------------
@@ -18,35 +18,35 @@ gradient_clip: 1.0
 # ---------------------------------------------------------------------------
 # Learning-rate schedule (linear warmup → cosine decay to 10 % of peak)
 # ---------------------------------------------------------------------------
-# max_steps is not configured here — it is derived automatically from the
-# model parameter count using the Chinchilla scaling law (20 tokens per
-# parameter), ensuring the compute budget matches the model size.
 warmup_steps: 500
 
 # ---------------------------------------------------------------------------
 # Data
 # ---------------------------------------------------------------------------
-# Micro-batch size per gradient-accumulation step.
+# Root directory for downloaded parquet shards (raw/) and tokenised caches
+# (tokens/). Subdirectories are created automatically on first run.
+data_dir: data/climbmix
+
+# Fraction of documents sampled from each downloaded shard for BPE tokenizer
+# training. A small value (e.g. 0.01) is sufficient for learning good merges
+# and keeps tokenizer training fast.
+tokenizer_train_fraction: 0.01
+
 batch_size: 8
-# Number of forward/backward passes before one optimizer step.
-# Effective batch size = batch_size × gradient_accumulation_steps × context_length tokens.
 gradient_accumulation_steps: 4
-# Rows of ClimbMix reserved for validation / test (skipped during training).
-n_val_examples: 5000
-n_test_examples: 5000
-# DataLoader worker processes per split (set to 0 to debug in the main process).
+
+# Tokens reserved at the start of the first shard for val and test splits.
+# 5_120_000 = 5 000 non-overlapping sequences at context_length=1024.
+n_val_tokens: 5120000
+n_test_tokens: 5120000
+
 num_workers: 4
 
 # ---------------------------------------------------------------------------
 # Logging & checkpoints
 # ---------------------------------------------------------------------------
-# Steps between training-loss log lines.
 log_interval: 50
-# Steps between validation evaluations and checkpoint saves.
 eval_interval: 500
-# Batches averaged for each evaluation pass (train / val / test).
 eval_iters: 100
-# Directory for checkpoint files.
 checkpoint_dir: checkpoints
-# PyTorch device string.  Falls back to CPU if the device is unavailable.
 device: cuda

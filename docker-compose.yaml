@@ -9,8 +9,15 @@ services:
     ipc: host
 
     volumes:
-      # HuggingFace dataset / model cache.  Persists downloaded ClimbMix
-      # shards across container restarts so they are not re-downloaded.
+      # Downloaded parquet shards, tokenised .npy caches, and the trained
+      # tokenizer pickle.  The training config sets data_dir: "data/climbmix",
+      # which resolves to /app/data/climbmix inside the container.
+      # Persisting /app/data means shards and the tokenizer are never
+      # re-downloaded or re-trained across container restarts.
+      - climbmix_data:/app/data
+
+      # HuggingFace Hub metadata, lock files, and any other cached assets
+      # (no longer stores shards — those go to climbmix_data above).
       - hf_cache:/data/huggingface
 
       # Model checkpoints.  The training config sets checkpoint_dir:
@@ -26,5 +33,6 @@ services:
               capabilities: [gpu]
 
 volumes:
+  climbmix_data:
   hf_cache:
   checkpoints:

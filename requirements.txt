@@ -1,8 +1,10 @@
 dacite
 datasets
 einops
+huggingface_hub
 jaxtyping
 numpy
+pyarrow
 pyyaml
 tiktoken
 torch

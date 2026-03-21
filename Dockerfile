@@ -1,6 +1,5 @@
 # Requires PyTorch >= 2.10 for torch.optim.Muon.
-# Update the tag below when a newer pytorch/pytorch image is available.
-FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
+FROM pytorch/pytorch:2.10.0-cuda12.8-cudnn9-runtime
 
 WORKDIR /app
 
@@ -16,19 +15,17 @@ RUN apt-get update \
 # them out and rely entirely on what the base image provides.
 COPY requirements.txt .
 RUN grep -vE '^(torch|torchvision|torchaudio)' requirements.txt \
-    | pip install --no-cache-dir -r /dev/stdin
+    | pip install --no-cache-dir --break-system-packages -r /dev/stdin
 
-# Install the project package so that `from components import ...` etc. work.
-COPY pyproject.toml .
 COPY src/ ./src/
-RUN pip install --no-cache-dir --no-deps -e .
-
 COPY train.py .
 
 # src/ is the Python package root for all internal imports.
 ENV PYTHONPATH=/app/src
 
-# HuggingFace datasets and model cache (mapped to a named volume at runtime).
+# HuggingFace Hub metadata and lock files (mapped to a named volume at
+# runtime).  Parquet shards and tokenised caches live in /app/data, which is
+# mounted separately via the climbmix_data volume.
 ENV HF_HOME=/data/huggingface
 
 # Unbuffered output so log lines appear immediately in `docker logs`.

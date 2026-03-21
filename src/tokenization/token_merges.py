@@ -57,7 +57,13 @@ class TokenMerges:
             text_segment: str,
             vocabulary: vocabulary_module.Vocabulary) -> List[int]:
         """Apply BPE merges to encode a text segment into token ids."""
-        tokens = [vocabulary.text_to_token.get(char) for char in text_segment]
+        # Characters absent from the vocabulary (e.g. non-ASCII Unicode) are
+        # silently dropped rather than producing None entries that would
+        # corrupt downstream token arrays.
+        tokens = [
+            t for char in text_segment
+            if (t := vocabulary.text_to_token.get(char)) is not None
+        ]
         additional_merges_possible = True
         while additional_merges_possible and len(tokens) > 1:
             additional_merges_possible = False
