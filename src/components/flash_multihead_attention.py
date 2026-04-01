@@ -14,7 +14,7 @@ class FlashAttentionConfig:
     context_length: int
     dropout: float
     num_heads: int
-    block_size: int
+    block_size: int = 64
     qkv_bias: bool = False
 
     def __post_init__(self):

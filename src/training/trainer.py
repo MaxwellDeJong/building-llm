@@ -78,6 +78,7 @@ import torch
 import torch.nn.functional as F
 import yaml
 
+from components import flash_multihead_attention
 from components import gpt_model
 from tokenization.tokenizer import Tokenizer
 from training import dataset as dataset_module
@@ -146,6 +147,20 @@ class TrainingConfig:
     num_workers:
         DataLoader worker processes for the training split.
 
+    Architecture overrides
+    ~~~~~~~~~~~~~~~~~~~~~~
+    attention_impl:
+        Which multi-head attention implementation to use.  One of:
+
+        * ``"standard"`` – ``torch.nn.functional.scaled_dot_product_attention``
+          (fused CUDA kernel when available; materialises O(T²) attention
+          scores in VRAM).
+        * ``"flash"`` – block-tiled manual Flash Attention (O(T) VRAM).
+
+    flash_block_size:
+        Tile size for the manual Flash Attention inner loop.  Only used when
+        ``attention_impl`` is ``"flash"``.
+
     Logging & checkpoints
     ~~~~~~~~~~~~~~~~~~~~~
     log_interval:
@@ -182,12 +197,24 @@ class TrainingConfig:
     n_test_tokens: int
     num_workers: int
 
+    # Architecture overrides
+    attention_impl: str
+    flash_block_size: int
+
     # Logging & checkpoints
     log_interval: int
     eval_interval: int
     eval_iters: int
     checkpoint_dir: str
     device: str
+
+    def __post_init__(self) -> None:
+        allowed = {"standard", "flash"}
+        if self.attention_impl not in allowed:
+            raise ValueError(
+                f"attention_impl must be one of {allowed!r}; "
+                f"got {self.attention_impl!r}."
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +277,26 @@ class Trainer:
         self._cfg = load_yaml_config(training_config_path, TrainingConfig)
         model_cfg: gpt_model.GPTModelConfig = load_yaml_config(
             model_config_path, gpt_model.GPTModelConfig)
+
+        if self._cfg.attention_impl == "flash":
+            std = model_cfg.transformer_block_config.mha_config
+            model_cfg.transformer_block_config.mha_config = (
+                flash_multihead_attention.FlashAttentionConfig(
+                    d_in=std.d_in,
+                    d_out=std.d_out,
+                    context_length=std.context_length,
+                    dropout=std.dropout,
+                    num_heads=std.num_heads,
+                    block_size=self._cfg.flash_block_size,
+                    qkv_bias=std.qkv_bias,
+                )
+            )
+            log.info(
+                "Attention implementation: flash (block_size=%d)",
+                self._cfg.flash_block_size,
+            )
+        else:
+            log.info("Attention implementation: standard")
 
         self._device = self._resolve_device(self._cfg.device)
         log.info("Device: %s", self._device)

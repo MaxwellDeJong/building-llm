@@ -5,14 +5,20 @@ from jaxtyping import Float
 import torch
 
 from components import feed_forward_network
+from components import flash_multihead_attention
 from components import layer_norm
 from components import multihead_attention
+
+AttentionConfig = (
+    multihead_attention.MultiHeadAttentionConfig
+    | flash_multihead_attention.FlashAttentionConfig
+)
 
 
 @dataclasses.dataclass
 class TransformerBlockConfig:
     """Configuration for a single transformer block."""
-    mha_config: multihead_attention.MultiHeadAttentionConfig
+    mha_config: AttentionConfig
     ffn_config: feed_forward_network.FeedForwardNetworkConfig
 
     def __post_init__(self):
@@ -32,8 +38,13 @@ class TransformerBlock(torch.nn.Module):
     def __init__(self, transformer_config: TransformerBlockConfig) -> None:
         super().__init__()
         self._emb_dim = transformer_config.emb_dim
-        self._mha = multihead_attention.MultiHeadAttention(
-            transformer_config.mha_config)
+        if isinstance(transformer_config.mha_config,
+                      flash_multihead_attention.FlashAttentionConfig):
+            self._mha = flash_multihead_attention.MultiHeadAttention(
+                transformer_config.mha_config)
+        else:
+            self._mha = multihead_attention.MultiHeadAttention(
+                transformer_config.mha_config)
         self._ffn = feed_forward_network.FeedForwardNetwork(
             transformer_config.ffn_config)
         self._mha_norm = layer_norm.LayerNorm(

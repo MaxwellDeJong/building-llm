@@ -43,6 +43,22 @@ n_test_tokens: 5120000
 num_workers: 4
 
 # ---------------------------------------------------------------------------
+# Model architecture overrides
+# ---------------------------------------------------------------------------
+# Which multi-head attention implementation to use inside every transformer
+# block.  Allowed values:
+#   standard – uses torch.nn.functional.scaled_dot_product_attention (fused
+#               CUDA kernel when available; O(T²) VRAM).
+#   flash    – block-tiled manual Flash Attention implementation
+#               (O(T) VRAM; controlled by flash_block_size below).
+attention_impl: standard
+
+# Tile size for the manual Flash Attention inner loop.  Only used when
+# attention_impl is "flash".  Larger values increase arithmetic intensity at
+# the cost of more SRAM; 64 is a safe default for most GPU SRAM budgets.
+flash_block_size: 64
+
+# ---------------------------------------------------------------------------
 # Logging & checkpoints
 # ---------------------------------------------------------------------------
 log_interval: 50
