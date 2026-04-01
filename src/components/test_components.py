@@ -7,6 +7,7 @@ import torch
 import yaml
 
 from components import feed_forward_network
+from components import flash_multihead_attention
 from components import gpt_model
 from components import multihead_attention
 from components import transformer_block
@@ -113,6 +114,126 @@ class TestGPTModelFromYaml(unittest.TestCase):
         with torch.no_grad():
             out = self.model(batch)
         self.assertEqual(out.shape, torch.Size([2, 4, self.cfg.vocab_size]))
+
+
+def _make_mha_pair(
+        d_in: int,
+        d_out: int,
+        num_heads: int,
+        context_length: int,
+        block_size: int,
+        seed: int = 42,
+) -> tuple[multihead_attention.MultiHeadAttention,
+           flash_multihead_attention.MultiHeadAttention]:
+    """Return a (standard, flash) MHA pair with identical weights."""
+    torch.manual_seed(seed)
+    std_cfg = multihead_attention.MultiHeadAttentionConfig(
+        d_in=d_in, d_out=d_out, context_length=context_length,
+        dropout=0.0, num_heads=num_heads)
+    std_mha = multihead_attention.MultiHeadAttention(std_cfg)
+    std_mha.eval()
+
+    flash_cfg = flash_multihead_attention.FlashAttentionConfig(
+        d_in=d_in, d_out=d_out, context_length=context_length,
+        dropout=0.0, num_heads=num_heads, block_size=block_size)
+    flash_mha = flash_multihead_attention.MultiHeadAttention(flash_cfg)
+    flash_mha.eval()
+
+    # Mirror all learnable weights so both modules are numerically identical.
+    with torch.no_grad():
+        flash_mha._W_query.weight.copy_(std_mha._W_query.weight)
+        flash_mha._W_key.weight.copy_(std_mha._W_key.weight)
+        flash_mha._W_value.weight.copy_(std_mha._W_value.weight)
+        flash_mha._out_proj.weight.copy_(std_mha._out_proj.weight)
+        flash_mha._out_proj.bias.copy_(std_mha._out_proj.bias)
+
+    return std_mha, flash_mha
+
+
+class TestFlashAttentionMatchesBaseline(unittest.TestCase):
+    """Flash attention output must be numerically identical to the baseline."""
+
+    def _assert_outputs_close(
+            self,
+            d_in: int,
+            d_out: int,
+            num_heads: int,
+            seq_len: int,
+            context_length: int,
+            block_size: int,
+            batch_size: int = 2,
+            seed: int = 42,
+    ) -> None:
+        std_mha, flash_mha = _make_mha_pair(
+            d_in=d_in, d_out=d_out, num_heads=num_heads,
+            context_length=context_length, block_size=block_size, seed=seed)
+        torch.manual_seed(seed + 1)
+        x = torch.randn(batch_size, seq_len, d_in)
+        with torch.no_grad():
+            out_std = std_mha(x)
+            out_flash = flash_mha(x)
+        torch.testing.assert_close(out_std, out_flash)
+
+    def test_block_divides_seq_len_evenly(self):
+        """block_size evenly divides sequence length."""
+        self._assert_outputs_close(
+            d_in=4, d_out=4, num_heads=2,
+            seq_len=8, context_length=8, block_size=2)
+
+    def test_block_does_not_divide_seq_len(self):
+        """Last tile is smaller than block_size."""
+        self._assert_outputs_close(
+            d_in=4, d_out=4, num_heads=2,
+            seq_len=7, context_length=8, block_size=3)
+
+    def test_block_size_one(self):
+        """block_size=1 gives the most fine-grained tiling."""
+        self._assert_outputs_close(
+            d_in=4, d_out=4, num_heads=2,
+            seq_len=6, context_length=8, block_size=1)
+
+    def test_single_tile_covers_full_sequence(self):
+        """block_size >= seq_len collapses to a single tile."""
+        self._assert_outputs_close(
+            d_in=4, d_out=4, num_heads=2,
+            seq_len=6, context_length=8, block_size=8)
+
+    def test_single_token_sequence(self):
+        """Single-token sequence: only the first query-key position matters."""
+        self._assert_outputs_close(
+            d_in=4, d_out=4, num_heads=2,
+            seq_len=1, context_length=8, block_size=2)
+
+    def test_larger_model_dims(self):
+        """Larger d_in/d_out/num_heads combination."""
+        self._assert_outputs_close(
+            d_in=12, d_out=12, num_heads=4,
+            seq_len=10, context_length=16, block_size=3)
+
+    def test_output_shape_matches(self):
+        """Output tensor shape must equal (batch, seq_len, d_out)."""
+        std_mha, flash_mha = _make_mha_pair(
+            d_in=6, d_out=6, num_heads=3,
+            context_length=10, block_size=3)
+        x = torch.randn(3, 9, 6)
+        with torch.no_grad():
+            out_std = std_mha(x)
+            out_flash = flash_mha(x)
+        self.assertEqual(out_std.shape, out_flash.shape)
+
+    def test_batch_dimension_independent(self):
+        """Each batch item must produce the same output regardless of other items."""
+        std_mha, flash_mha = _make_mha_pair(
+            d_in=4, d_out=4, num_heads=2,
+            context_length=8, block_size=2)
+        torch.manual_seed(0)
+        x_single = torch.randn(1, 6, 4)
+        x_batch = x_single.expand(3, -1, -1)
+        with torch.no_grad():
+            out_flash_single = flash_mha(x_single)
+            out_flash_batch = flash_mha(x_batch)
+        torch.testing.assert_close(
+            out_flash_single.expand(3, -1, -1), out_flash_batch)
 
 
 if __name__ == '__main__':
