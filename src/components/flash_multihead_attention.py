@@ -59,6 +59,7 @@ class MultiHeadAttention(torch.nn.Module):
             Float[torch.Tensor, 'b t dout']):
         """Compute multi-head causal self-attention over x."""
         dtype = x.dtype
+        device = x.device
         batch_size = x.shape[0]
         num_tokens = x.shape[1]
         bh = batch_size * self._num_heads
@@ -91,12 +92,12 @@ class MultiHeadAttention(torch.nn.Module):
             # to record the actual block size used.
             block_size = Q_i.shape[1]
             q_indices = torch.arange(
-                i, i + block_size, device=x.device, dtype=torch.int32).unsqueeze(-1)
+                i, i + block_size, device=device, dtype=torch.int32).unsqueeze(-1)
             m_i = torch.full(
-                (bh, block_size), -torch.inf, device=x.device, dtype=dtype)
-            l_i = torch.zeros((bh, block_size), device=x.device, dtype=dtype)
+                (bh, block_size), -torch.inf, device=device, dtype=dtype)
+            l_i = torch.zeros((bh, block_size), device=device, dtype=dtype)
             O_i = torch.zeros(
-                (bh, block_size, self._head_dim), device=x.device, dtype=dtype)
+                (bh, block_size, self._head_dim), device=device, dtype=dtype)
             for j in range(0, i + block_size, self._block_size):
                 K_jT = rearrange(
                     keys[:, j:j+self._block_size, :],
@@ -123,7 +124,7 @@ class MultiHeadAttention(torch.nn.Module):
                 m_i = m_new
             output[:, i:i+self._block_size] = O_i / l_i.unsqueeze(-1)
 
-        # ---- Restore shape ----
+        # Restore shape for projection layer.
         output = rearrange(
             output, '(b nh) t dout -> b t (nh dout)', nh=self._num_heads)
         return self._out_proj(output)
