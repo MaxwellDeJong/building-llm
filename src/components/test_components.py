@@ -8,6 +8,7 @@ import yaml
 
 from components import feed_forward_network
 from components import flash_multihead_attention
+from components import hybrid_flash_multihead_attention
 from components import gpt_model
 from components import multihead_attention
 from components import transformer_block
@@ -117,6 +118,7 @@ class TestGPTModelFromYaml(unittest.TestCase):
 
 
 def _make_mha_pair(
+        flash_module,
         d_in: int,
         d_out: int,
         num_heads: int,
@@ -124,8 +126,13 @@ def _make_mha_pair(
         block_size: int,
         seed: int = 42,
 ) -> tuple[multihead_attention.MultiHeadAttention,
-           flash_multihead_attention.MultiHeadAttention]:
-    """Return a (standard, flash) MHA pair with identical weights."""
+           torch.nn.Module]:
+    """Return a (standard, flash-variant) MHA pair with identical weights.
+
+    Args:
+        flash_module: Either ``flash_multihead_attention`` or
+            ``hybrid_flash_multihead_attention``.
+    """
     torch.manual_seed(seed)
     std_cfg = multihead_attention.MultiHeadAttentionConfig(
         d_in=d_in, d_out=d_out, context_length=context_length,
@@ -133,10 +140,10 @@ def _make_mha_pair(
     std_mha = multihead_attention.MultiHeadAttention(std_cfg)
     std_mha.eval()
 
-    flash_cfg = flash_multihead_attention.FlashAttentionConfig(
+    flash_cfg = flash_module.FlashAttentionConfig(
         d_in=d_in, d_out=d_out, context_length=context_length,
         dropout=0.0, num_heads=num_heads, block_size=block_size)
-    flash_mha = flash_multihead_attention.MultiHeadAttention(flash_cfg)
+    flash_mha = flash_module.MultiHeadAttention(flash_cfg)
     flash_mha.eval()
 
     # Mirror all learnable weights so both modules are numerically identical.
@@ -150,8 +157,15 @@ def _make_mha_pair(
     return std_mha, flash_mha
 
 
-class TestFlashAttentionMatchesBaseline(unittest.TestCase):
-    """Flash attention output must be numerically identical to the baseline."""
+class _FlashAttentionBaseTest:
+    """Shared tests for any flash-attention variant.
+
+    Mixed into concrete subclasses alongside ``unittest.TestCase``;
+    not a TestCase itself so the test runner ignores it directly.
+    Subclasses must set ``flash_module`` to the module under test.
+    """
+
+    flash_module = None  # overridden by subclasses
 
     def _assert_outputs_close(
             self,
@@ -165,6 +179,7 @@ class TestFlashAttentionMatchesBaseline(unittest.TestCase):
             seed: int = 42,
     ) -> None:
         std_mha, flash_mha = _make_mha_pair(
+            self.flash_module,
             d_in=d_in, d_out=d_out, num_heads=num_heads,
             context_length=context_length, block_size=block_size, seed=seed)
         torch.manual_seed(seed + 1)
@@ -213,6 +228,7 @@ class TestFlashAttentionMatchesBaseline(unittest.TestCase):
     def test_output_shape_matches(self):
         """Output tensor shape must equal (batch, seq_len, d_out)."""
         std_mha, flash_mha = _make_mha_pair(
+            self.flash_module,
             d_in=6, d_out=6, num_heads=3,
             context_length=10, block_size=3)
         x = torch.randn(3, 9, 6)
@@ -223,7 +239,8 @@ class TestFlashAttentionMatchesBaseline(unittest.TestCase):
 
     def test_batch_dimension_independent(self):
         """Each batch item must produce the same output regardless of other items."""
-        std_mha, flash_mha = _make_mha_pair(
+        _, flash_mha = _make_mha_pair(
+            self.flash_module,
             d_in=4, d_out=4, num_heads=2,
             context_length=8, block_size=2)
         torch.manual_seed(0)
@@ -234,6 +251,18 @@ class TestFlashAttentionMatchesBaseline(unittest.TestCase):
             out_flash_batch = flash_mha(x_batch)
         torch.testing.assert_close(
             out_flash_single.expand(3, -1, -1), out_flash_batch)
+
+
+class TestFlashAttentionMatchesBaseline(_FlashAttentionBaseTest, unittest.TestCase):
+    """flash_multihead_attention output must match the standard baseline."""
+
+    flash_module = flash_multihead_attention
+
+
+class TestHybridFlashAttentionMatchesBaseline(_FlashAttentionBaseTest, unittest.TestCase):
+    """hybrid_flash_multihead_attention output must match the standard baseline."""
+
+    flash_module = hybrid_flash_multihead_attention
 
 
 if __name__ == '__main__':
