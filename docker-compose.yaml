@@ -9,6 +9,10 @@ services:
     ipc: host
 
     volumes:
+      # Bind-mount the config directory so that changes to YAML files on the
+      # host take effect on the next `docker compose up` without a rebuild.
+      - ./src/configs:/app/src/configs
+
       # Downloaded parquet shards, tokenised .npy caches, and the trained
       # tokenizer pickle.  The training config sets data_dir: "data/climbmix",
       # which resolves to /app/data/climbmix inside the container.

@@ -1,5 +1,5 @@
-vocab_size: 16384
-n_layers: 12
+vocab_size: 32768
+n_layers: 16
 drop_out: 0.1
 emb_dim: 768
 transformer_block_config:

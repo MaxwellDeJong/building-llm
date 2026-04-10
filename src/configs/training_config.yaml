@@ -32,7 +32,7 @@ data_dir: data/climbmix
 # and keeps tokenizer training fast.
 tokenizer_train_fraction: 0.01
 
-batch_size: 8
+batch_size: 2
 gradient_accumulation_steps: 4
 
 # Tokens reserved at the start of the first shard for val and test splits.
@@ -51,7 +51,7 @@ num_workers: 4
 #               CUDA kernel when available; O(T²) VRAM).
 #   flash    – block-tiled manual Flash Attention implementation
 #               (O(T) VRAM; controlled by flash_block_size below).
-attention_impl: standard
+attention_impl: flash
 
 # Tile size for the manual Flash Attention inner loop.  Only used when
 # attention_impl is "flash".  Larger values increase arithmetic intensity at

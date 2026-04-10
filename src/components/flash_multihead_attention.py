@@ -42,7 +42,6 @@ class MultiHeadAttention(torch.nn.Module):
             mha_config.d_in, mha_config.d_out, bias=mha_config.qkv_bias)
         # Linear layer to combine head outputs.
         self._out_proj = torch.nn.Linear(mha_config.d_out, mha_config.d_out)
-        self._dropout = torch.nn.Dropout(mha_config.dropout)
 
     def _apply_causal_mask(
             self,
@@ -111,7 +110,6 @@ class MultiHeadAttention(torch.nn.Module):
 
                 m_ij = torch.max(S_ij, dim=-1).values
                 P_ij = torch.exp(S_ij - m_ij.unsqueeze(-1))
-                P_ij = self._dropout(P_ij)
                 l_ij = torch.sum(P_ij, dim=-1)
                 m_new = torch.maximum(m_i, m_ij)
 
