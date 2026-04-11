@@ -109,12 +109,19 @@ class MultiHeadAttention(torch.nn.Module):
                 dim=-1, keepdim=True)
             P_ij: Float[torch.Tensor, 'b_nh blk_q t_k'] = torch.exp(
                 S_ij - m_i)
-            P_ij = self._dropout(P_ij)
             l_i: Float[torch.Tensor, 'b_nh blk_q 1'] = P_ij.sum(
                 dim=-1, keepdim=True)
+            # Normalize before dropout so l_i is never zero.  Dropping a
+            # weight after normalization is the standard attention-dropout
+            # semantics (equivalent to F.scaled_dot_product_attention's
+            # dropout_p).  Applying dropout before normalization risks zeroing
+            # the entire row for queries with very few valid keys (e.g. the
+            # first token), making l_i = 0 and producing NaN.
+            attn_weights: Float[torch.Tensor, 'b_nh blk_q t_k'] = (
+                self._dropout(P_ij / l_i))
 
             O_i: Float[torch.Tensor, 'b_nh blk_q hd'] = (
-                torch.einsum('bqk,bkd->bqd', P_ij, V_causal) / l_i)
+                torch.einsum('bqk,bkd->bqd', attn_weights, V_causal))
             output[:, q_start:q_end, :] = O_i
 
         # Restore shape for projection layer.
