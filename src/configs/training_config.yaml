@@ -32,7 +32,7 @@ data_dir: data/climbmix
 # and keeps tokenizer training fast.
 tokenizer_train_fraction: 0.01
 
-batch_size: 2
+batch_size: 8
 gradient_accumulation_steps: 4
 
 # Tokens reserved at the start of the first shard for val and test splits.

@@ -386,6 +386,7 @@ class Trainer:
             tokenizer_path=tokenizer_path,
             token_dir=token_dir,
             special_tokens=_SPECIAL_TOKENS,
+            num_workers=cfg.num_workers,
         )
 
         # ------------------------------------------------------------------
@@ -494,6 +495,8 @@ class Trainer:
                 batch_size=cfg.batch_size,
                 num_workers=workers,
                 pin_memory=(self._device.type == "cuda" and workers > 0),
+                persistent_workers=(workers > 0),
+                prefetch_factor=(4 if workers > 0 else None),
             )
 
         return {"train": _make("train"), "val": _make("val"), "test": _make("test")}
@@ -547,7 +550,7 @@ class Trainer:
             opt.zero_grad()
 
         step = 0
-        accum_loss = 0.0
+        accum_loss = torch.tensor(0.0, device=self._device)
         accum_steps = 0
         t0 = time.perf_counter()
         train_iter = iter(self._loaders["train"])
@@ -577,7 +580,7 @@ class Trainer:
                     loss = F.cross_entropy(
                         logits.view(-1, logits.size(-1)), targets.view(-1))
                 (loss / cfg.gradient_accumulation_steps).backward()
-                accum_loss += loss.item()
+                accum_loss += loss.detach()
                 accum_steps += 1
 
             # ---- Gradient clipping ------------------------------------
@@ -598,7 +601,7 @@ class Trainer:
             # ---- Training log -----------------------------------------
             if step % cfg.log_interval == 0:
                 elapsed = time.perf_counter() - t0
-                avg_loss = accum_loss / accum_steps
+                avg_loss = (accum_loss / accum_steps).item()
                 tokens_per_sec = (
                     cfg.log_interval
                     * cfg.gradient_accumulation_steps
@@ -614,7 +617,7 @@ class Trainer:
                     step, avg_loss, math.exp(avg_loss),
                     tokens_per_sec, muon_lr, adamw_lr,
                 )
-                accum_loss = 0.0
+                accum_loss = torch.tensor(0.0, device=self._device)
                 accum_steps = 0
                 t0 = time.perf_counter()
 
