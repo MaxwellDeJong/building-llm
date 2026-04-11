@@ -78,7 +78,7 @@ import torch
 import torch.nn.functional as F
 import yaml
 
-from components import flash_multihead_attention
+from components import hybrid_flash_multihead_attention
 from components import gpt_model
 from tokenization.tokenizer import Tokenizer
 from training import dataset as dataset_module
@@ -281,7 +281,7 @@ class Trainer:
         if self._cfg.attention_impl == "flash":
             std = model_cfg.transformer_block_config.mha_config
             model_cfg.transformer_block_config.mha_config = (
-                flash_multihead_attention.FlashAttentionConfig(
+                hybrid_flash_multihead_attention.FlashAttentionConfig(
                     d_in=std.d_in,
                     d_out=std.d_out,
                     context_length=std.context_length,
