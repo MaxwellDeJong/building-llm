@@ -19,6 +19,7 @@ RUN grep -vE '^(torch|torchvision|torchaudio)' requirements.txt \
 
 COPY src/ ./src/
 COPY train.py .
+COPY evaluate.py .
 
 # src/ is the Python package root for all internal imports.
 ENV PYTHONPATH=/app/src

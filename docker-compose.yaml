@@ -36,6 +36,38 @@ services:
               count: all
               capabilities: [gpu]
 
+  evaluator:
+    # Reuses the trainer image — no separate build step required.
+    image: building-llm-trainer
+
+    # Evaluate the latest checkpoint on all three splits by default.
+    # Override via: docker compose run --rm evaluator --checkpoint checkpoints/ckpt_step_0001000.pt
+    # or limit the train split: docker compose run --rm evaluator --latest --train-batches 200
+    command: ["python", "evaluate.py", "--latest"]
+
+    volumes:
+      - ./src/configs:/app/src/configs
+      - climbmix_data:/app/data
+      - hf_cache:/data/huggingface
+      - checkpoints:/app/checkpoints
+
+    # Evaluation is read-only with respect to training state; a single GPU is
+    # sufficient and the service exits after printing the summary table.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    # Do not restart automatically — evaluation is a one-shot job.
+    restart: "no"
+
+    # Keep stdin open so `docker compose run` works cleanly.
+    stdin_open: false
+    tty: false
+
 volumes:
   climbmix_data:
   hf_cache:
